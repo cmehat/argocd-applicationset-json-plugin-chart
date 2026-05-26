@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "argocd-applicationset-json-plugin.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "argocd-applicationset-json-plugin.fullname" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "argocd-applicationset-json-plugin.fullname" . }}
+    spec:
+      serviceAccountName: {{ include "argocd-applicationset-json-plugin.fullname" . }}
+      containers:
+      - name: plugin
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        env:
+        - name: JSON_URL
+          value: "{{ .Values.plugin.url }}"
+        {{- if or (eq .Values.plugin.mode "jsonpath") (eq .Values.plugin.mode "dual") }}
+        - name: JSON_PATH
+          value: "{{ .Values.plugin.jsonpath.path }}"
+        {{- if .Values.plugin.jsonpath.keysOnly }}
+        - name: JSON_PATH_KEYS_ONLY
+          value: "true"
+        {{- end }}
+        {{- if .Values.plugin.jsonpath.keyField }}
+        - name: JSON_PATH_KEY_FIELD
+          value: "{{ .Values.plugin.jsonpath.keyField }}"
+        {{- end }}
+        {{- if .Values.plugin.jsonpath.excludeIfExists }}
+        - name: JSON_PATH_EXCLUDE_IF_EXISTS
+          value: "{{ .Values.plugin.jsonpath.excludeIfExists }}"
+        {{- end }}
+        {{- end }}
+        {{- if or (eq .Values.plugin.mode "jq") (eq .Values.plugin.mode "dual") }}
+        - name: JSON_FILTER
+          value: {{ .Values.plugin.jq.filter | quote }}
+        {{- end }}
+        {{- if eq .Values.plugin.mode "dual" }}
+        - name: JSON_FILTER_TYPE
+          value: "{{ .Values.plugin.dual.filterType }}"
+        {{- end }}
+        ports:
+        - containerPort: {{ .Values.service.targetPort }}
+          name: http
+        volumeMounts:
+        - name: token
+          mountPath: /var/run/argo
+          readOnly: true
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+        {{- if .Values.livenessProbe.enabled }}
+        livenessProbe:
+          httpGet:
+            path: /api/v1/getparams.execute
+            port: {{ .Values.service.targetPort }}
+          initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+          failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
+        {{- end }}
+        {{- if .Values.readinessProbe.enabled }}
+        readinessProbe:
+          httpGet:
+            path: /api/v1/getparams.execute
+            port: {{ .Values.service.targetPort }}
+          initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+          failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
+        {{- end }}
+        {{- if .Values.startupProbe.enabled }}
+        startupProbe:
+          httpGet:
+            path: /api/v1/getparams.execute
+            port: {{ .Values.service.targetPort }}
+          initialDelaySeconds: {{ .Values.startupProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.startupProbe.periodSeconds }}
+          failureThreshold: {{ .Values.startupProbe.failureThreshold }}
+        {{- end }}
+      volumes:
+      - name: token
+        secret:
+          secretName: {{ .Values.secrets.existingSecret | default (include "argocd-applicationset-json-plugin.fullname" .) }}
+          {{- if .Values.secrets.existingSecretKey }}
+          items:
+            - key: {{ .Values.secrets.existingSecretKey }}
+              path: token
+          {{- end }}

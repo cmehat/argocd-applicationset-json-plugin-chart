@@ -1,0 +1,6 @@
+apiVersion: v2
+name: argocd-applicationset-json-plugin
+description: ArgoCD ApplicationSet plugin that fetches JSON from a URL and applies JSONPath or jq filtering (JSONPath/jq/dual modes)
+type: application
+version: 1.0.0
+appVersion: "1.0.0"

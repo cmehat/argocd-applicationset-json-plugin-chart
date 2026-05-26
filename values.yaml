@@ -1,0 +1,93 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/cmehat/argocd-applicationset-json-plugin
+  pullPolicy: IfNotPresent
+  # -- Image tag. Use variant prefix for specific variants:
+  # jsonpath-1.0.0, jq-1.0.0, dual-1.0.0, or just 1.0.0 (defaults to jsonpath)
+  tag: "jsonpath-1.0.0"
+
+nameOverride: ""
+fullNameOverride: ""
+
+service:
+  type: ClusterIP
+  port: 4355
+  targetPort: 4355
+
+resources:
+  requests:
+    memory: "64Mi"
+    cpu: "100m"
+  limits:
+    memory: "128Mi"
+    cpu: "200m"
+
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 5
+  periodSeconds: 30
+  failureThreshold: 3
+
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  failureThreshold: 3
+
+startupProbe:
+  enabled: true
+  initialDelaySeconds: 0
+  periodSeconds: 5
+  failureThreshold: 30
+
+externalSecrets:
+  # -- Enable External Secrets integration (if false, uses inline values below)
+  enabled: false
+  # -- Secret key in the external secret store containing the plugin token
+  tokenSecretKey: "argocd-applicationset-json-plugin-token"
+  secretStore:
+    # -- Kind of secret store (ClusterSecretStore or SecretStore)
+    kind: ClusterSecretStore
+    # -- Name of the secret store
+    name: gcp-secrets
+
+secrets:
+  # -- Name of an existing secret to use for the token (if set, no secret will be created)
+  existingSecret: ""
+  # -- Key in the existing secret that contains the token value (defaults to 'token')
+  existingSecretKey: ""
+  # -- Inline secret values (used if existingSecret is not set and externalSecrets.enabled is false)
+  # -- The token defaults to a placeholder since it's mandatory to handle auth in argocd generator plugin
+  # -- change it for production use or (recommended) use external secrets / existing secret
+  inline:
+    token: "argocd-applicationset-plugin-token"
+
+plugin:
+  # -- Plugin mode: "jsonpath" (default), "jq", or "dual"
+  mode: "jsonpath"
+  # -- Requeue interval in seconds for ArgoCD ApplicationSet
+  requeueAfterSeconds: 300
+  # -- URL to fetch JSON data from
+  url: "https://example.com/data.json"
+
+  # -- JSONPath mode settings (used when mode is "jsonpath" or "dual")
+  jsonpath:
+    # -- JSONPath expression to filter data
+    path: "$.*"
+    # -- Return only {keyField: "key"} instead of full objects
+    keysOnly: true
+    # -- Field name for extracted keys
+    keyField: "name"
+    # -- Exclude objects where this field exists
+    excludeIfExists: "aliasOf"
+
+  # -- jq mode settings (used when mode is "jq" or "dual")
+  jq:
+    # -- jq filter expression
+    filter: 'to_entries | map(select(.value.aliasOf == null) | {name: .key})'
+
+  # -- Dual mode settings (used when mode is "dual")
+  dual:
+    # -- Filter type selection: "auto", "jq", or "jsonpath"
+    filterType: "auto"
