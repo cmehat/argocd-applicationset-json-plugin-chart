@@ -1,0 +1,55 @@
+# Battle-tested ApplicationSet wiring the plugin as a Generator (JSONPath mode).
+#
+# Prerequisite: the chart is installed with release name `asplugin` in the
+# `argocd` namespace (so the ConfigMap is `asplugin-argocd-applicationset-json-plugin`).
+#
+# The plugin returns one entry per top-level key of the fetched JSON,
+# skipping any entry that has an `aliasOf` field. Each entry is exposed as
+# {{name}} in the template below.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: per-network-app
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions:
+    - missingkey=error  # fail loudly if the plugin returns malformed output
+  generators:
+    - plugin:
+        configMapRef:
+          name: asplugin-argocd-applicationset-json-plugin
+        # `parameters` lets you pass values to the plugin's request payload.
+        # The chart's plugin reads JSON_URL/JSON_PATH from env vars, so the
+        # payload is unused here; we still send `{}` to satisfy ArgoCD.
+        input:
+          parameters: {}
+        # Honour the value set on the plugin pod. ArgoCD will requeue the
+        # generator at most every requeueAfterSeconds + a small jitter.
+        requeueAfterSeconds: 300
+  template:
+    metadata:
+      name: 'per-network-{{ .name }}'
+      labels:
+        app.kubernetes.io/managed-by: argocd-applicationset
+        app.kubernetes.io/instance: '{{ .name }}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/cmehat/example-gitops
+        targetRevision: HEAD
+        # The plugin output ({"name": "alpha"}, {"name": "beta"}, ...) drives
+        # which directory in the repo each Application points at.
+        path: 'envs/{{ .name }}'
+        directory:
+          recurse: true
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: 'env-{{ .name }}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true

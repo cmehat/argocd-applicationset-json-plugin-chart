@@ -1,0 +1,65 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: helm lint + render
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v5
+        with:
+          version: v3.16.4
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install PyYAML
+        run: pip install pyyaml
+
+      - name: helm lint (strict)
+        run: helm lint --strict .
+
+      - name: Render all chart modes
+        run: |
+          set -euo pipefail
+          for mode in jsonpath jq dual; do
+            echo "::group::helm template plugin.mode=$mode"
+            helm template ci . \
+              --namespace argocd \
+              --set plugin.mode=$mode \
+              --set image.tag=$mode-1.0.0 \
+              > /tmp/render-$mode.yaml
+            echo "::endgroup::"
+          done
+
+      - name: Validate rendered manifests with kubeconform
+        uses: docker://ghcr.io/yannh/kubeconform:v0.6.7
+        with:
+          args: -strict -summary -kubernetes-version 1.30.0 /tmp/render-jsonpath.yaml /tmp/render-jq.yaml /tmp/render-dual.yaml
+
+      - name: Validate ApplicationSet examples are valid YAML
+        run: |
+          set -euo pipefail
+          for f in examples/applicationset-*.yaml; do
+            echo "checking $f"
+            python -c "import yaml,sys; list(yaml.safe_load_all(open(sys.argv[1])))" "$f"
+          done
+
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run shellcheck on example scripts
+        run: shellcheck examples/*.sh

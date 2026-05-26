@@ -1,0 +1,53 @@
+# Battle-tested ApplicationSet wiring the plugin as a Generator (jq mode).
+#
+# Same shape as applicationset-jsonpath.yaml, but assumes the chart was
+# installed with `--set plugin.mode=jq --set image.tag=jq-1.0.0` so the
+# plugin is running the jq variant. The chart's `plugin.jq.filter` value
+# controls what the plugin returns.
+#
+# Default filter (from values.yaml):
+#   to_entries | map(select(.value.aliasOf == null) | {name: .key})
+#
+# Override at install time, e.g.:
+#   helm upgrade asplugin . --reuse-values \
+#     --set plugin.jq.filter='[.items[] | {name: .id, region: .location.region}]'
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: per-network-app-jq
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions:
+    - missingkey=error
+  generators:
+    - plugin:
+        configMapRef:
+          name: asplugin-argocd-applicationset-json-plugin
+        input:
+          parameters: {}
+        requeueAfterSeconds: 300
+  template:
+    metadata:
+      name: 'per-network-{{ .name }}'
+      labels:
+        app.kubernetes.io/managed-by: argocd-applicationset
+        app.kubernetes.io/instance: '{{ .name }}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/cmehat/example-gitops
+        targetRevision: HEAD
+        path: 'envs/{{ .name }}'
+        directory:
+          recurse: true
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: 'env-{{ .name }}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true

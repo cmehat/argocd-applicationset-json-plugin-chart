@@ -12,6 +12,14 @@ helm install my-plugin . \
   --set plugin.url=https://example.com/data.json
 ```
 
+## End-to-end example
+
+See [`examples/`](examples/) for a battle-tested walkthrough that:
+
+- installs the chart,
+- verifies the plugin responds to the same call ArgoCD makes (see [`examples/test-plugin.sh`](examples/test-plugin.sh)),
+- wires it up as an ApplicationSet generator ([`examples/applicationset-jsonpath.yaml`](examples/applicationset-jsonpath.yaml), [`examples/applicationset-jq.yaml`](examples/applicationset-jq.yaml)).
+
 ## Plugin modes
 
 `plugin.mode` selects which evaluator to enable: `jsonpath` (default), `jq`, or `dual`. The image tag in `image.tag` should match (`jsonpath-1.0.0`, `jq-1.0.0`, or `dual-1.0.0`).
