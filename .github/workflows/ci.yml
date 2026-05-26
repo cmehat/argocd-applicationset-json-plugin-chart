@@ -33,20 +33,26 @@ jobs:
       - name: Render all chart modes
         run: |
           set -euo pipefail
+          mkdir -p .render
           for mode in jsonpath jq dual; do
             echo "::group::helm template plugin.mode=$mode"
             helm template ci . \
               --namespace argocd \
               --set plugin.mode=$mode \
               --set image.tag=$mode-1.0.0 \
-              > /tmp/render-$mode.yaml
+              > .render/$mode.yaml
             echo "::endgroup::"
           done
 
+      - name: Install kubeconform
+        run: |
+          curl -fsSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz \
+            | sudo tar -xz -C /usr/local/bin kubeconform
+
       - name: Validate rendered manifests with kubeconform
-        uses: docker://ghcr.io/yannh/kubeconform:v0.6.7
-        with:
-          args: -strict -summary -kubernetes-version 1.30.0 /tmp/render-jsonpath.yaml /tmp/render-jq.yaml /tmp/render-dual.yaml
+        run: |
+          kubeconform -strict -summary -kubernetes-version 1.30.0 \
+            .render/jsonpath.yaml .render/jq.yaml .render/dual.yaml
 
       - name: Validate ApplicationSet examples are valid YAML
         run: |
