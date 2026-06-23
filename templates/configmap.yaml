@@ -3,6 +3,10 @@ kind: ConfigMap
 metadata:
   name: {{ include "argocd-applicationset-json-plugin.fullname" . }}
   namespace: {{ .Release.Namespace }}
+  labels:
+    # Required for ArgoCD's ApplicationSet controller to discover this
+    # ConfigMap as a plugin-generator source (configMapRef.name lookup).
+    app.kubernetes.io/part-of: argocd
 data:
   token: "${{ include "argocd-applicationset-json-plugin.fullname" . }}:token"
   baseUrl: "http://{{ include "argocd-applicationset-json-plugin.fullname" . }}.argocd.svc.cluster.local"
