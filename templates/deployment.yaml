@@ -54,10 +54,12 @@ spec:
           readOnly: true
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
+        # The plugin's only HTTP route, /api/v1/getparams.execute, is POST-only
+        # and token-authenticated (a GET returns 501), so it cannot back an
+        # httpGet probe. Probe the listening port with tcpSocket instead.
         {{- if .Values.livenessProbe.enabled }}
         livenessProbe:
-          httpGet:
-            path: /api/v1/getparams.execute
+          tcpSocket:
             port: {{ .Values.service.targetPort }}
           initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
           periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
@@ -65,8 +67,7 @@ spec:
         {{- end }}
         {{- if .Values.readinessProbe.enabled }}
         readinessProbe:
-          httpGet:
-            path: /api/v1/getparams.execute
+          tcpSocket:
             port: {{ .Values.service.targetPort }}
           initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
           periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
@@ -74,8 +75,7 @@ spec:
         {{- end }}
         {{- if .Values.startupProbe.enabled }}
         startupProbe:
-          httpGet:
-            path: /api/v1/getparams.execute
+          tcpSocket:
             port: {{ .Values.service.targetPort }}
           initialDelaySeconds: {{ .Values.startupProbe.initialDelaySeconds }}
           periodSeconds: {{ .Values.startupProbe.periodSeconds }}

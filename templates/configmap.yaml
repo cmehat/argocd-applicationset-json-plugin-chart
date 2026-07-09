@@ -9,5 +9,5 @@ metadata:
     app.kubernetes.io/part-of: argocd
 data:
   token: "${{ include "argocd-applicationset-json-plugin.fullname" . }}:token"
-  baseUrl: "http://{{ include "argocd-applicationset-json-plugin.fullname" . }}.argocd.svc.cluster.local"
+  baseUrl: "http://{{ include "argocd-applicationset-json-plugin.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}"
   requestTimeout: "30"
