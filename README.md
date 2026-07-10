@@ -20,6 +20,58 @@ See [`examples/`](examples/) for a battle-tested walkthrough that:
 - verifies the plugin responds to the same call ArgoCD makes (see [`examples/test-plugin.sh`](examples/test-plugin.sh)),
 - wires it up as an ApplicationSet generator ([`examples/applicationset-jsonpath.yaml`](examples/applicationset-jsonpath.yaml), [`examples/applicationset-jq.yaml`](examples/applicationset-jq.yaml)).
 
+## Deploying with ArgoCD — required topology & gotchas
+
+This chart deploys the *backend* that an ArgoCD ApplicationSet **plugin generator**
+calls. Three things must be right, or generation fails silently:
+
+### 1. Install on the cluster/namespace that runs the ApplicationSet controller
+
+A plugin generator (`generators[].plugin.configMapRef`) is resolved by the
+`argocd-applicationset-controller` **in its own namespace**, and the controller
+reaches the plugin over the in-cluster network at
+`http://<release>.<namespace>.svc.cluster.local:<service.port>`.
+
+So install this chart into the **same cluster and namespace as the ApplicationSet
+controller** (typically `argocd`). Installing it on a *workload* cluster — even the
+one your generated Applications target — makes the controller fail every reconcile:
+
+```
+error getting plugin from generator: error fetching ConfigMap "<release>" not found
+```
+
+Where the generated Applications *deploy* is independent of this: that is decided
+by the consumer ApplicationSet's own generators/template, not by where the plugin
+backend runs.
+
+### 2. Probes are `tcpSocket`, not `httpGet`
+
+The plugin's only route, `POST /api/v1/getparams.execute`, is POST-only and
+token-authenticated — a `GET` returns `501`. The chart's liveness/readiness/startup
+probes therefore use `tcpSocket` against the listening port. **Do not** point an
+`httpGet` probe at that path: the kubelet fails the liveness check and crash-loops
+the pod (`exitCode 137`).
+
+### 3. `image.tag` must be a tag that CI actually published
+
+Image tags are variant-prefixed semver built by the plugin repo's CI
+(`jsonpath-1.0.0`, `jq-1.0.0`, `dual-1.0.0`, plus `<variant>-latest`). Pinning a tag
+that was never built yields `ImagePullBackOff`. See the plugin repo's `AGENTS.md`
+for the release/tag scheme.
+
+The ConfigMap this chart renders already advertises the correct `baseUrl` (including
+the Service port) and token; reference it from your ApplicationSet as:
+
+```yaml
+generators:
+  - plugin:
+      configMapRef:
+        name: <release-name>   # this chart's fullname
+      input:
+        parameters: {}
+      requeueAfterSeconds: 300
+```
+
 ## Plugin modes
 
 `plugin.mode` selects which evaluator to enable: `jsonpath` (default), `jq`, or `dual`. The image tag in `image.tag` should match (`jsonpath-1.0.0`, `jq-1.0.0`, or `dual-1.0.0`).
